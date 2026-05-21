@@ -247,6 +247,73 @@
         </div>
       </section>
 
+      <!-- Personal Taste & Favorites -->
+      <section class="section">
+        <div class="section-header">
+          <h3 class="section-title">❤️ Favorites & Personal Taste</h3>
+        </div>
+        <div class="glass-card" style="display:flex; flex-direction:column; gap:12px; padding:16px;">
+          <div>
+            <h4 style="font-size:0.85rem; color:var(--accent-1); margin-bottom:6px; font-weight:600; display:flex; align-items:center; gap:6px;">⭐ Favorite Recipes</h4>
+            <div id="dash-favorites-list" style="display:flex; flex-wrap:wrap; gap:8px;">
+              <!-- Favorites rendered here -->
+            </div>
+          </div>
+          <hr style="border:none; border-top:1px solid var(--glass-border); margin:4px 0;">
+          <div>
+            <h4 style="font-size:0.85rem; color:var(--accent-2); margin-bottom:6px; font-weight:600; display:flex; align-items:center; gap:6px;">🧠 Learned Taste Profile</h4>
+            <div id="dash-taste-profile" style="font-size:0.8rem; color:var(--text-secondary); line-height:1.4;">
+              <!-- Taste profile learned models -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Agent Memory Showcase Console -->
+      <section class="section">
+        <div class="section-header">
+          <h3 class="section-title">🧠 Agent Memory & Self-Training Showcase</h3>
+        </div>
+        <div class="glass-card" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
+          <p style="font-size:0.82rem; color:var(--text-secondary); line-height:1.4;">
+            Experience the biomimetic loop. Simulate how the agent learns from experiences, synthesizes rules, and adapts decisions.
+          </p>
+          
+          <!-- Animated Workflow Diagram -->
+          <div class="showcase-workflow">
+            <div class="workflow-node" id="node-learn">
+              <span class="node-icon">📥</span>
+              <span class="node-label">Learn</span>
+            </div>
+            <div class="workflow-line" id="line-1"></div>
+            <div class="workflow-node" id="node-reflect">
+              <span class="node-icon">🧠</span>
+              <span class="node-label">Reflect</span>
+            </div>
+            <div class="workflow-line" id="line-2"></div>
+            <div class="workflow-node" id="node-recall">
+              <span class="node-icon">🔍</span>
+              <span class="node-label">Recall</span>
+            </div>
+            <div class="workflow-line" id="line-3"></div>
+            <div class="workflow-node" id="node-act">
+              <span class="node-icon">🎯</span>
+              <span class="node-label">Adapt</span>
+            </div>
+          </div>
+
+          <!-- Live Showcase Logger Console -->
+          <div id="showcase-console" class="val-mono" style="background:#05070c; border:1px solid var(--glass-border); border-radius:var(--radius-sm); padding:10px; font-size:0.75rem; color:#4ade80; min-height:80px; max-height:120px; overflow-y:auto; line-height:1.4;">
+            Console ready. Click "Run Self-Training" below to start the demo.
+          </div>
+
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-primary btn-sm" onclick="window.runShowcaseTraining()" id="showcase-train-btn" style="flex:1; justify-content:center;">⚡ Run Self-Training</button>
+            <button class="btn btn-ghost btn-sm" onclick="window.testShowcaseDecision()" id="showcase-test-btn" style="flex:1; justify-content:center;">🎯 Test Decision</button>
+          </div>
+        </div>
+      </section>
+
       <!-- Chat CTA -->
       <section class="suggestion-cta-section" style="margin-top: 24px;">
         <button class="btn btn-primary btn-large" onclick="openDailyChat()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
@@ -306,6 +373,18 @@
         <div style="width:36px"></div>
       </div>
 
+      <!-- API Configuration -->
+      <div class="glass-card settings-section">
+        <h3>🔑 API Configuration</h3>
+        <div class="form-group" style="margin-top:12px;">
+          <label for="settings-api-key">Groq API Key</label>
+          <div style="display:flex; gap:8px;">
+            <input type="password" id="settings-api-key" class="chat-input" placeholder="gsk_..." style="flex:1;" />
+            <button class="btn btn-primary btn-sm" onclick="saveApiKeyFromUI()">Save</button>
+          </div>
+          <span style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; display:block;">Your API key is saved locally in your database.</span>
+        </div>
+      </div>
 
       <!-- Family Members -->
       <div class="glass-card settings-section">
@@ -314,6 +393,18 @@
           <button class="btn btn-primary btn-sm" onclick="showAddMemberModal()">+ Add</button>
         </div>
         <div id="settings-family-list" class="settings-family-list"></div>
+      </div>
+
+      <!-- Hindsight Memory Inspector -->
+      <div class="glass-card settings-section">
+        <div class="section-header">
+          <h3>🧠 Hindsight Agent Memory</h3>
+          <button class="btn btn-ghost btn-sm" onclick="Hindsight.clearMemories()" style="color:var(--danger)">Clear All</button>
+        </div>
+        <p style="font-size: 0.76rem; color: var(--text-muted); margin-top: -4px; margin-bottom: 12px; line-height: 1.4;">
+          View experiences and reflected mental models synthesized by ChefOS biomimetic memory.
+        </p>
+        <div id="settings-memory-inspector" class="settings-memory-inspector"></div>
       </div>
 
       <!-- Meal History -->
