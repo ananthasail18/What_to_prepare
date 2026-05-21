@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>What To Prepare — AI Meal Planner</title>
+  <meta name="description" content="Your personal AI-powered daily meal planner. Add family preferences once, get smart daily meal suggestions every day." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Ambient Background Orbs -->
+  <div class="bg-orbs" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- ========== SCREEN: LOGIN ========== -->
+  <div id="screen-login" class="screen active">
+    <div class="auth-container">
+      <div class="auth-logo">
+        <span class="logo-icon">🍽️</span>
+        <h1 class="logo-text">What To Prepare</h1>
+        <p class="logo-tagline">Your AI-powered family meal planner</p>
+      </div>
+
+      <div class="auth-card glass-card">
+        <div class="auth-tabs">
+          <button id="tab-login" class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+          <button id="tab-register" class="auth-tab" onclick="switchAuthTab('register')">Create Account</button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="form-login" class="auth-form" onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" placeholder="you@example.com" required autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password" />
+          </div>
+          <div id="login-error" class="form-error hidden"></div>
+          <button type="submit" class="btn btn-primary btn-full">
+            <span>Sign In</span>
+            <span class="btn-icon">→</span>
+          </button>
+        </form>
+
+        <!-- Register Form -->
+        <form id="form-register" class="auth-form hidden" onsubmit="handleRegister(event)">
+          <div class="form-group">
+            <label for="reg-name">Your Name</label>
+            <input type="text" id="reg-name" placeholder="e.g. Anant" required autocomplete="name" />
+          </div>
+          <div class="form-group">
+            <label for="reg-email">Email</label>
+            <input type="email" id="reg-email" placeholder="you@example.com" required autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label for="reg-password">Password</label>
+            <input type="password" id="reg-password" placeholder="Min. 6 characters" required minlength="6" autocomplete="new-password" />
+          </div>
+          <div id="reg-error" class="form-error hidden"></div>
+          <button type="submit" class="btn btn-primary btn-full">
+            <span>Create Account</span>
+            <span class="btn-icon">→</span>
+          </button>
+        </form>
+      </div>
+
+      <p class="auth-note">🔒 All data stored locally on your device.</p>
+    </div>
+  </div>
+
+
+
+  <!-- ========== SCREEN: FAMILY SETUP FORM ========== -->
+  <div id="screen-setup" class="screen">
+    <div class="fsetup-wrapper">
+
+      <!-- Header -->
+      <div class="fsetup-header">
+        <div class="fsetup-logo">🍽️ <span>What To Prepare</span></div>
+        <div class="setup-step-badge" id="fsetup-badge">Family Setup</div>
+      </div>
+
+      <!-- ── PHASE A: How many members? ── -->
+      <div id="fsetup-phase-count" class="fsetup-phase">
+        <div class="fsetup-card glass-card">
+          <div class="fsetup-emoji">👨‍👩‍👧‍👦</div>
+          <h2>How many people are in your family?</h2>
+          <p class="fsetup-sub">Including yourself. You can always add more later.</p>
+
+          <div class="fsetup-count-row">
+            <button class="fsetup-count-btn" onclick="adjustMemberCount(-1)" id="fsetup-count-dec">−</button>
+            <div class="fsetup-count-display">
+              <span id="fsetup-count-num">2</span>
+              <span class="fsetup-count-label">members</span>
+            </div>
+            <button class="fsetup-count-btn" onclick="adjustMemberCount(1)">+</button>
+          </div>
+
+          <div class="fsetup-count-quick">
+            <button class="fsetup-quick-pill" onclick="setMemberCount(1)">Just me</button>
+            <button class="fsetup-quick-pill" onclick="setMemberCount(2)">2</button>
+            <button class="fsetup-quick-pill" onclick="setMemberCount(3)">3</button>
+            <button class="fsetup-quick-pill" onclick="setMemberCount(4)">4</button>
+            <button class="fsetup-quick-pill" onclick="setMemberCount(5)">5+</button>
+          </div>
+
+          <button class="btn btn-primary btn-full" onclick="startMemberForms()">
+            Let's Go <span class="btn-icon">→</span>
+          </button>
+
+          <button class="btn btn-ghost btn-full fsetup-skip-btn" onclick="loadSampleFamily()">
+            ⚡ Skip — load sample family
+          </button>
+        </div>
+      </div>
+
+      <!-- ── PHASE B: Per-member form ── -->
+      <div id="fsetup-phase-member" class="fsetup-phase hidden">
+
+        <!-- Progress bar -->
+        <div class="fsetup-progress-wrap">
+          <div class="fsetup-progress-bar">
+            <div class="fsetup-progress-fill" id="fsetup-progress-fill"></div>
+          </div>
+          <div class="fsetup-progress-label" id="fsetup-progress-label">Member 1 of 2</div>
+        </div>
+
+        <!-- Member dots -->
+        <div class="fsetup-dots" id="fsetup-dots"></div>
+
+        <!-- Form card -->
+        <div class="fsetup-card glass-card" id="fsetup-member-card">
+          <div class="fsetup-member-avatar" id="fsetup-member-avatar">🧑</div>
+          <h3 class="fsetup-member-title" id="fsetup-member-title">Member 1</h3>
+
+          <form id="fsetup-member-form" onsubmit="submitMemberForm(event)">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="fs-name">Name *</label>
+                <input type="text" id="fs-name" placeholder="e.g. Mom" required autocomplete="off" />
+              </div>
+              <div class="form-group">
+                <label for="fs-age">Age</label>
+                <input type="number" id="fs-age" placeholder="e.g. 42" min="1" max="120" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="fs-dietary">Diet Type</label>
+              <div class="fsetup-diet-pills" id="fsetup-diet-pills">
+                <button type="button" class="diet-pill active" data-value="">No restriction</button>
+                <button type="button" class="diet-pill" data-value="vegetarian">🥗 Vegetarian</button>
+                <button type="button" class="diet-pill" data-value="vegan">🌱 Vegan</button>
+                <button type="button" class="diet-pill" data-value="non-vegetarian">🍗 Non-Veg</button>
+                <button type="button" class="diet-pill" data-value="eggetarian">🍳 Eggetarian</button>
+                <button type="button" class="diet-pill" data-value="jain">🙏 Jain</button>
+              </div>
+              <input type="hidden" id="fs-dietary" value="" />
+            </div>
+
+            <div class="form-group">
+              <label for="fs-likes">Favourite Foods</label>
+              <input type="text" id="fs-likes" placeholder="e.g. biryani, spicy food, South Indian" autocomplete="off" />
+            </div>
+
+            <div class="form-group">
+              <label for="fs-dislikes">Dislikes / Allergies</label>
+              <input type="text" id="fs-dislikes" placeholder="e.g. mushrooms, bitter gourd" autocomplete="off" />
+            </div>
+
+            <div class="form-group">
+              <label for="fs-notes">Health Notes <span style="font-weight:400;text-transform:none;color:var(--text-muted)">(optional)</span></label>
+              <input type="text" id="fs-notes" placeholder="e.g. diabetic, low-sodium" autocomplete="off" />
+            </div>
+
+            <div class="fsetup-form-footer">
+              <button type="button" class="btn btn-ghost" id="fsetup-back-btn" onclick="prevMemberForm()">← Back</button>
+              <button type="submit" class="btn btn-primary" id="fsetup-next-btn">
+                Next Member <span class="btn-icon">→</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========== SCREEN: DASHBOARD ========== -->
+  <div id="screen-dashboard" class="screen">
+    <nav class="topnav glass-card">
+      <div class="topnav-logo">🍽️ <span>What To Prepare</span></div>
+      <div class="topnav-actions">
+        <button class="btn-icon-round" onclick="showScreen('screen-settings')" title="Settings">⚙️</button>
+        <button class="btn-icon-round" onclick="handleLogout()" title="Logout">🚪</button>
+      </div>
+    </nav>
+
+    <div class="dashboard-body">
+      <!-- Greeting -->
+      <div class="greeting-section">
+        <h2 id="greeting-text">Good morning!</h2>
+        <p id="greeting-date" class="greeting-date"></p>
+      </div>
+
+      <!-- Yesterday's meal -->
+      <div id="yesterday-card" class="info-chip glass-card hidden">
+        <span class="info-chip-label">Yesterday you had</span>
+        <span id="yesterday-meal" class="info-chip-value"></span>
+      </div>
+
+      <!-- Family Members -->
+      <section class="section">
+        <div class="section-header">
+          <h3 class="section-title">Your Family</h3>
+          <button class="btn btn-ghost btn-sm" onclick="showScreen('screen-settings')">Edit</button>
+        </div>
+        <div id="family-cards" class="family-cards-grid"></div>
+        <button id="add-member-dash-btn" class="btn btn-ghost btn-sm add-member-btn" onclick="showAddMemberModal()">
+          + Add Member
+        </button>
+      </section>
+
+      <!-- Your Fridge -->
+      <section class="section">
+        <div class="section-header">
+          <h3 class="section-title">Your Fridge 🧊</h3>
+        </div>
+        <div class="glass-card">
+          <div class="fridge-input-wrap" style="display:flex; gap:8px; margin-bottom:12px;">
+            <input type="text" id="fridge-input" class="chat-input" placeholder="Add ingredient with quantity (e.g. 2kg carrots)" onkeypress="if(event.key === 'Enter') addFridgeItemFromUI()" style="flex:1;" />
+            <button class="btn btn-primary" onclick="addFridgeItemFromUI()">Add</button>
+          </div>
+          <div id="fridge-items-container" class="fridge-items-container" style="display:flex; flex-wrap:wrap; gap:8px;">
+            <!-- Items rendered here -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Chat CTA -->
+      <section class="suggestion-cta-section" style="margin-top: 24px;">
+        <button class="btn btn-primary btn-large" onclick="openDailyChat()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <span style="font-size: 1.2rem;">💬</span>
+          <span>Start Brainstorming Meals</span>
+        </button>
+      </section>
+
+      <!-- Meal History -->
+      <section class="section" id="history-section">
+        <div class="section-header">
+          <h3 class="section-title">Recent Meals</h3>
+        </div>
+        <div id="meal-history-list" class="meal-history-list"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ========== SCREEN: DAILY CHAT ========== -->
+  <div id="screen-daily-chat" class="screen">
+    <div class="chat-screen">
+      <div class="chat-topbar">
+        <button class="btn-icon-round" onclick="showScreen('screen-dashboard')" title="Back">←</button>
+        <div class="chat-topbar-info">
+          <div class="ai-avatar">🤖</div>
+          <div>
+            <div class="ai-name">Prep Assistant</div>
+            <div class="ai-status"><span class="status-dot"></span> Ready to help</div>
+          </div>
+        </div>
+        <div style="width:36px"></div>
+      </div>
+      <div id="daily-messages" class="chat-messages"></div>
+      <div class="chat-input-bar">
+        <button id="daily-voice-btn" class="btn-icon-round" onclick="toggleVoice('daily')" title="Voice Input">🎤</button>
+        <input
+          type="text"
+          id="daily-input"
+          class="chat-input"
+          placeholder="Ask anything about meals..."
+          onkeydown="if(event.key==='Enter') sendDailyMessage()"
+        />
+        <button class="btn-icon-round btn-send" onclick="sendDailyMessage()" title="Send">➤</button>
+      </div>
+      <div id="voice-indicator-daily" class="voice-indicator hidden">
+        <span class="voice-pulse"></span> Listening...
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SCREEN: SETTINGS ========== -->
+  <div id="screen-settings" class="screen">
+    <div class="settings-body">
+      <div class="settings-topbar">
+        <button class="btn-icon-round" onclick="showScreen('screen-dashboard')" title="Back">←</button>
+        <h2>Settings</h2>
+        <div style="width:36px"></div>
+      </div>
+
+
+      <!-- Family Members -->
+      <div class="glass-card settings-section">
+        <div class="section-header">
+          <h3>👨‍👩‍👧‍👦 Family Members</h3>
+          <button class="btn btn-primary btn-sm" onclick="showAddMemberModal()">+ Add</button>
+        </div>
+        <div id="settings-family-list" class="settings-family-list"></div>
+      </div>
+
+      <!-- Meal History -->
+      <div class="glass-card settings-section">
+        <div class="section-header">
+          <h3>📋 Meal Log</h3>
+          <button class="btn btn-ghost btn-sm" onclick="clearMealHistory()" style="color:var(--danger)">Clear All</button>
+        </div>
+        <div id="settings-meal-log" class="meal-history-list"></div>
+      </div>
+
+      <!-- Danger Zone -->
+      <div class="glass-card settings-section danger-zone">
+        <h3>⚠️ Danger Zone</h3>
+        <button class="btn btn-danger btn-sm" onclick="resetSetup()">Reset Family Setup</button>
+        <button class="btn btn-danger btn-sm" onclick="handleLogout()">Sign Out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== MODAL: Add/Edit Family Member ========== -->
+  <div id="modal-member" class="modal-overlay hidden" onclick="closeModalOnBackdrop(event)">
+    <div class="modal glass-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-header">
+        <h3 id="modal-title">Add Family Member</h3>
+        <button class="btn-icon-round" onclick="closeMemberModal()">✕</button>
+      </div>
+      <form id="form-member" onsubmit="saveMember(event)">
+        <input type="hidden" id="member-id" />
+        <div class="form-group">
+          <label for="member-name">Name *</label>
+          <input type="text" id="member-name" placeholder="e.g. Mom" required />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="member-age">Age</label>
+            <input type="number" id="member-age" placeholder="45" min="1" max="120" />
+          </div>
+          <div class="form-group">
+            <label for="member-dietary">Diet Type</label>
+            <select id="member-dietary">
+              <option value="">No restriction</option>
+              <option value="vegetarian">Vegetarian</option>
+              <option value="vegan">Vegan</option>
+              <option value="non-vegetarian">Non-Vegetarian</option>
+              <option value="eggetarian">Eggetarian</option>
+              <option value="jain">Jain</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="member-likes">Likes / Favourites</label>
+          <input type="text" id="member-likes" placeholder="e.g. spicy food, biryani, South Indian" />
+        </div>
+        <div class="form-group">
+          <label for="member-dislikes">Dislikes / Allergies</label>
+          <input type="text" id="member-dislikes" placeholder="e.g. mushrooms, bitter gourd" />
+        </div>
+        <div class="form-group">
+          <label for="member-notes">Health Notes (optional)</label>
+          <input type="text" id="member-notes" placeholder="e.g. diabetic, low-sodium diet" />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeMemberModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="save-member-btn">Save Member</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========== MODAL: Log Custom Meal ========== -->
+  <div id="modal-log-meal" class="modal-overlay hidden" onclick="closeModalOnBackdrop(event)">
+    <div class="modal glass-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3>Log a Meal</h3>
+        <button class="btn-icon-round" onclick="document.getElementById('modal-log-meal').classList.add('hidden')">✕</button>
+      </div>
+      <div class="form-group">
+        <label for="custom-meal-input">What did you make?</label>
+        <input type="text" id="custom-meal-input" placeholder="e.g. Palak Paneer" />
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-log-meal').classList.add('hidden')">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmLogCustomMeal()">Log Meal ✓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
