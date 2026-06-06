@@ -334,19 +334,32 @@
 
   <!-- ========== SCREEN: DAILY CHAT ========== -->
   <div id="screen-daily-chat" class="screen">
-    <div class="chat-screen">
-      <div class="chat-topbar">
-        <button class="btn-icon-round" onclick="showScreen('screen-dashboard')" title="Back">←</button>
-        <div class="chat-topbar-info">
-          <div class="ai-avatar">🤖</div>
-          <div>
-            <div class="ai-name">Prep Assistant</div>
-            <div class="ai-status"><span class="status-dot"></span> Ready to help</div>
-          </div>
+    <div class="chat-layout-wrapper">
+      <div class="chat-sidebar glass-card">
+        <div class="chat-sidebar-header" style="display: flex; flex-direction: column; gap: 8px;">
+          <button class="btn btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600;" onclick="createNewChat(false)">
+            <span>🧠</span> ChefOS Chat
+          </button>
+          <button class="btn btn-ghost" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.02);" onclick="createNewChat(true)">
+            <span>👻</span> Vanilla Chat
+          </button>
         </div>
-        <div style="width:36px"></div>
+        <div id="chat-session-list" class="chat-session-list"></div>
       </div>
-      <div id="daily-messages" class="chat-messages"></div>
+      
+      <div class="chat-screen">
+        <div class="chat-topbar">
+          <button class="btn-icon-round" onclick="showScreen('screen-dashboard')" title="Back">←</button>
+          <div class="chat-topbar-info">
+            <div id="chat-topbar-avatar" class="ai-avatar">🤖</div>
+            <div>
+              <div id="chat-topbar-title" class="ai-name">Prep Assistant</div>
+              <div id="chat-topbar-status" class="ai-status"><span class="status-dot"></span> Ready to help</div>
+            </div>
+          </div>
+          <div style="width:36px"></div>
+        </div>
+        <div id="daily-messages" class="chat-messages"></div>
       <div class="chat-input-bar">
         <button id="daily-voice-btn" class="btn-icon-round" onclick="toggleVoice('daily')" title="Voice Input">🎤</button>
         <input
@@ -361,6 +374,7 @@
       <div id="voice-indicator-daily" class="voice-indicator hidden">
         <span class="voice-pulse"></span> Listening...
       </div>
+    </div>
     </div>
   </div>
 

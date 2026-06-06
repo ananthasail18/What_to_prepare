@@ -83,6 +83,11 @@ const Storage = {
 
   getApiKey: () => Storage.get('wtp_api_key') || '',
   saveApiKey: (key) => Storage.set('wtp_api_key', key),
+
+  getChatSessions: (email) => Storage.getUserData(email, 'chat_sessions') || [],
+  saveChatSessions: (email, sessions) => Storage.setUserData(email, 'chat_sessions', sessions),
+  getActiveChatId: (email) => Storage.getUserData(email, 'active_chat_id') || null,
+  saveActiveChatId: (email, id) => Storage.setUserData(email, 'active_chat_id', id),
   getFavorites: (email) => Storage.getUserData(email, 'favorites') || [],
   saveFavorites: (email, f) => Storage.setUserData(email, 'favorites', f),
 };
@@ -248,7 +253,8 @@ Example format:
 No other text, markdown blocks, explanations, or code blocks.`;
 
           const aiRes = await callAI([{ role: 'system', content: reflectionPrompt }], GROQ_MODEL);
-          const cleanJSON = aiRes.replace(/```json|```/g, '').trim();
+          const jsonMatch = aiRes.match(/\[[\s\S]*\]/);
+          const cleanJSON = jsonMatch ? jsonMatch[0] : aiRes.replace(/```json|```/g, '').trim();
           const parsedModels = JSON.parse(cleanJSON);
           if (Array.isArray(parsedModels)) {
             const oldMems = Hindsight.getMemoryData();
@@ -329,14 +335,20 @@ No other text, markdown blocks, explanations, or code blocks.`;
           confidence = 90;
         }
         else if (textLower.includes('allergy') || textLower.includes('allergic')) {
-          rule = `Strict Health Constraint: Do NOT suggest ingredients that trigger reported allergies.`;
+          rule = `Strict Health Constraint: Do NOT suggest ingredients that trigger reported allergies based on this rule: "${text}"`;
           category = "safety";
           confidence = 95;
         }
-        else if (textLower.includes('loved') || textLower.includes('enjoyed') || textLower.includes('favorite')) {
-          rule = `Synthesized Preference: Prioritize matching flavors/meals that received positive feedback.`;
-          category = "preference";
-          confidence = 80;
+        else if (textLower.includes('loved') || textLower.includes('enjoyed') || textLower.includes('favorite') || textLower.includes('like')) {
+          if (textLower.includes('dislike') || textLower.includes('hate') || textLower.includes('does not like') || textLower.includes("doesn't like")) {
+            rule = `Synthesized Constraint: Avoid suggesting ingredients that the user reported disliking based on this rule: "${text}"`;
+            category = "safety";
+            confidence = 85;
+          } else {
+            rule = `Synthesized Preference: Prioritize matching flavors/meals that received positive feedback based on: "${text}"`;
+            category = "preference";
+            confidence = 80;
+          }
         }
 
         if (rule) {
@@ -2087,21 +2099,130 @@ function clearMealHistory() {
 // DAILY CHAT (free-form)
 // ============================================================
 let dailyChatHistory = [];
+let chatSessions = [];
+let activeChatId = null;
 
-function openDailyChat() {
-  showScreen('screen-daily-chat');
+function loadChatSessions() {
+  chatSessions = Storage.getChatSessions(currentUser.email);
+  if (chatSessions.length === 0) {
+    createNewChat(false);
+  } else {
+    const savedActiveId = Storage.getActiveChatId(currentUser.email);
+    const sessionExists = chatSessions.find(s => s.id === savedActiveId);
+    if (sessionExists) {
+      loadChat(savedActiveId);
+    } else {
+      loadChat(chatSessions[chatSessions.length - 1].id);
+    }
+  }
+}
+
+function createNewChat(isVanilla = false, shouldRender = true) {
+  const newChat = {
+    id: 'chat_' + Date.now(),
+    title: new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    isVanilla: isVanilla,
+    messages: []
+  };
+  chatSessions.push(newChat);
+  Storage.saveChatSessions(currentUser.email, chatSessions);
+  if (shouldRender) {
+    loadChat(newChat.id);
+  }
+}
+
+function loadChat(chatId) {
+  activeChatId = chatId;
+  Storage.saveActiveChatId(currentUser.email, activeChatId);
+  const session = chatSessions.find(s => s.id === chatId);
+  if (!session) return;
+  
+  dailyChatHistory = session.messages;
+  
+  // Update header UI
+  const titleEl = document.getElementById('chat-topbar-title');
+  const avatarEl = document.getElementById('chat-topbar-avatar');
+  const statusEl = document.getElementById('chat-topbar-status');
+  if (titleEl && avatarEl && statusEl) {
+    if (session.isVanilla) {
+      titleEl.textContent = 'Vanilla AI (No Memory)';
+      avatarEl.textContent = '👻';
+      statusEl.innerHTML = '<span class="status-dot" style="background:#ef4444"></span> Raw LLM active';
+    } else {
+      titleEl.textContent = 'Prep Assistant';
+      avatarEl.textContent = '🤖';
+      statusEl.innerHTML = '<span class="status-dot"></span> Ready to help';
+    }
+  }
+
   const container = document.getElementById('daily-messages');
-  if (container.children.length === 0) {
+  if (container) container.innerHTML = '';
+  
+  if (dailyChatHistory.length === 0) {
     const name = currentUser.name;
-    addMessage('daily-messages', 'ai',
-      `Hi ${name}! 🍽️ Ask me anything about meals — "what's quick to make tonight?", "something for a cold day", "birthday dinner ideas" — I'm here!`,
-      [
+    const greeting = session.isVanilla 
+      ? `Hi ${name}. I am a standard AI. I have no memory of your habits, allergies, or past meals. How can I help you today?` 
+      : `Hi ${name}! 🍽️ Ask me anything about meals — "what's quick to make tonight?", "something for a cold day", "birthday dinner ideas" — I'm here!`;
+    
+    addMessage('daily-messages', 'ai', greeting,
+      session.isVanilla ? [] : [
         { label: "🍛 Quick dinner ideas", value: "Suggest something quick for dinner tonight" },
-        { label: "🎂 Special occasion", value: "It's a special occasion, what should I make?" },
         { label: "🥦 Something healthy", value: "Suggest a healthy meal for today" },
       ]
     );
+  } else {
+    dailyChatHistory.forEach(msg => {
+      addMessage('daily-messages', msg.role, msg.text);
+    });
   }
+  
+  renderChatSidebar();
+}
+
+function renderChatSidebar() {
+  const list = document.getElementById('chat-session-list');
+  if (!list) return;
+  list.innerHTML = '';
+  
+  [...chatSessions].reverse().forEach(session => {
+    const el = document.createElement('div');
+    el.className = 'chat-session-item' + (session.id === activeChatId ? ' active' : '');
+    
+    const titleSpan = document.createElement('span');
+    titleSpan.innerHTML = (session.isVanilla ? '👻 ' : '🧠 ') + session.title;
+    el.appendChild(titleSpan);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-icon-round btn-sm';
+    delBtn.innerHTML = '🗑️';
+    delBtn.style.padding = '4px';
+    delBtn.style.marginLeft = 'auto';
+    delBtn.onclick = (e) => {
+      e.stopPropagation();
+      deleteChat(session.id);
+    };
+    el.appendChild(delBtn);
+
+    el.onclick = () => loadChat(session.id);
+    list.appendChild(el);
+  });
+}
+
+function deleteChat(id) {
+  chatSessions = chatSessions.filter(s => s.id !== id);
+  Storage.saveChatSessions(currentUser.email, chatSessions);
+  if (chatSessions.length === 0) {
+    createNewChat();
+  } else if (activeChatId === id) {
+    loadChat(chatSessions[chatSessions.length - 1].id);
+  } else {
+    renderChatSidebar();
+  }
+}
+
+function openDailyChat() {
+  showScreen('screen-daily-chat');
+  loadChatSessions();
 }
 
 function addBlockedMessage(containerId, verifierData) {
@@ -2244,74 +2365,109 @@ async function sendDailyMessage() {
 
   addMessage('daily-messages', 'user', text);
   dailyChatHistory.push({ role: 'user', text });
+  Storage.saveChatSessions(currentUser.email, chatSessions);
 
   addThinkingIndicator('daily-messages');
 
-  // Retain feedback experience in background if relevant
-  if (/bloat|heavy|acid|reflux|pain|indigestion|spicy|heartburn|loved|enjoyed|disliked|allergy|allergic|sick/i.test(text)) {
-    Hindsight.retain(text);
-  }
+  const activeSession = chatSessions.find(s => s.id === activeChatId);
+  const isVanilla = activeSession ? activeSession.isVanilla : false;
 
-  // Recall relevant memories from Hindsight
   let recalledContext = '';
-  try {
-    const recalledMemories = await Hindsight.recall(text);
-    if (recalledMemories.length > 0) {
-      recalledContext = `Recalled Experiences & Learned Mental Models:\n${recalledMemories.map(m => `- ${m}`).join('\n')}`;
+
+  if (!isVanilla) {
+    // Retain feedback experience in background if relevant
+    if (/bloat|heavy|acid|reflux|pain|indigestion|spicy|heartburn|loved|enjoyed|dislike|like|hate|allergy|allergic|sick/i.test(text)) {
+      Hindsight.retain(text);
     }
-  } catch (memErr) {
-    console.warn("Hindsight recall error:", memErr);
+
+    // Recall relevant memories from Hindsight
+    try {
+      const recalledMemories = await Hindsight.recall(text);
+      if (recalledMemories.length > 0) {
+        recalledContext = `Recalled Experiences & Learned Mental Models:\n${recalledMemories.map(m => `- ${m}`).join('\n')}`;
+        
+        // Inject visual Hindsight Thinking card for the judges
+        const container = document.getElementById('daily-messages');
+        const memDiv = document.createElement('div');
+        memDiv.style.cssText = "margin: 10px 45px 10px 15px; font-size: 0.75rem; color: #10b981; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); padding: 12px; border-radius: 8px; font-family: 'Inter', sans-serif; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.05);";
+        memDiv.innerHTML = `
+          <div style="font-weight: 700; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <span style="font-size: 1.1rem;">🧠</span> Hindsight Memory Injected
+          </div>
+          <div style="color: var(--text-secondary); line-height: 1.5; padding-left: 4px; border-left: 2px solid rgba(16, 185, 129, 0.4);">
+            ${recalledMemories.map(m => `<i>${m}</i>`).join('<br/>')}
+          </div>
+        `;
+        // Insert right before the thinking indicator
+        const thinkingInd = document.getElementById('thinking-daily-messages');
+        if (thinkingInd) {
+          container.insertBefore(memDiv, thinkingInd);
+        } else {
+          container.appendChild(memDiv);
+        }
+        container.scrollTop = container.scrollHeight;
+      }
+    } catch (memErr) {
+      console.warn("Hindsight recall error:", memErr);
+    }
   }
 
   const family = Storage.getFamily(currentUser.email);
   const history = Storage.getMealHistory(currentUser.email);
   const recentMeals = history.slice(-5).map(h => h.meal);
-
   const fridgeItems = Storage.getFridge(currentUser.email);
   const favorites = Storage.getFavorites(currentUser.email);
   const mems = Hindsight.getMemoryData();
 
-  // 1. [CRITICAL SAFETY CONSTRAINT]
-  const safetyModels = (mems.mental_models || []).filter(m => m.category === 'safety');
-  const safetyConstraints = [];
-  family.forEach(m => {
-    if (m.dislikes && m.dislikes.length > 0) {
-      safetyConstraints.push(`- Avoid ${m.dislikes.join(', ')} for ${m.name} (Dislikes/Allergies).`);
+  let systemPrompt = '';
+
+  if (isVanilla) {
+    systemPrompt = `You are a helpful culinary AI assistant. You have NO memory of the user's past habits, family members, allergies, or dietary restrictions.
+Answer the user's query conversationally. Do not worry about inventory or safety constraints. Suggest whatever dishes you think are best based ONLY on the immediate query.
+Highlight dish names with **bold text**.
+User Query: "${text}"`;
+  } else {
+    // 1. [CRITICAL SAFETY CONSTRAINT]
+    const safetyModels = (mems.mental_models || []).filter(m => m.category === 'safety');
+    const safetyConstraints = [];
+    family.forEach(m => {
+      if (m.dislikes && m.dislikes.length > 0) {
+        safetyConstraints.push(`- Avoid ${m.dislikes.join(', ')} for ${m.name} (Dislikes/Allergies).`);
+      }
+      if (m.notes) {
+        safetyConstraints.push(`- Health/diet notes for ${m.name}: ${m.notes}.`);
+      }
+    });
+    safetyModels.forEach(m => {
+      safetyConstraints.push(`- Learned safety rule: ${m.content} (Confidence: ${m.confidence}%).`);
+    });
+    const safetyBlock = safetyConstraints.length > 0
+      ? safetyConstraints.join('\n')
+      : '- No specific restrictions.';
+
+    // 2. [AVAILABLE INVENTORY]
+    const inventoryBlock = fridgeItems.length > 0
+      ? fridgeItems.map(item => `- ${item}`).join('\n')
+      : 'None (Fridge is completely empty)';
+
+    // 3. [RECALL MEMORY RULES]
+    const memoryRules = [];
+    if (recalledContext) {
+      memoryRules.push(recalledContext);
     }
-    if (m.notes) {
-      safetyConstraints.push(`- Health/diet notes for ${m.name}: ${m.notes}.`);
+    const prefModels = (mems.mental_models || []).filter(m => m.category === 'preference');
+    if (prefModels.length > 0) {
+      memoryRules.push(`Learned Preferences:\n${prefModels.map(m => `- ${m.content} (Confidence: ${m.confidence}%)`).join('\n')}`);
     }
-  });
-  safetyModels.forEach(m => {
-    safetyConstraints.push(`- Learned safety rule: ${m.content} (Confidence: ${m.confidence}%).`);
-  });
-  const safetyBlock = safetyConstraints.length > 0
-    ? safetyConstraints.join('\n')
-    : '- No specific restrictions.';
+    const memoryBlock = memoryRules.length > 0
+      ? memoryRules.join('\n\n')
+      : '- No prior patterns recalled.';
 
-  // 2. [AVAILABLE INVENTORY]
-  const inventoryBlock = fridgeItems.length > 0
-    ? fridgeItems.map(item => `- ${item}`).join('\n')
-    : 'None (Fridge is completely empty)';
+    // 4. [PREFERENCE OPTIMIZATION]
+    const preferenceBlock = `User Favorites: ${favorites.length > 0 ? favorites.join(', ') : 'None specified.'}\nRecent meals (avoid repeating these): ${recentMeals.join(', ') || 'None logged yet.'}`;
 
-  // 3. [RECALL MEMORY RULES]
-  const memoryRules = [];
-  if (recalledContext) {
-    memoryRules.push(recalledContext);
-  }
-  const prefModels = (mems.mental_models || []).filter(m => m.category === 'preference');
-  if (prefModels.length > 0) {
-    memoryRules.push(`Learned Preferences:\n${prefModels.map(m => `- ${m.content} (Confidence: ${m.confidence}%)`).join('\n')}`);
-  }
-  const memoryBlock = memoryRules.length > 0
-    ? memoryRules.join('\n\n')
-    : '- No prior patterns recalled.';
-
-  // 4. [PREFERENCE OPTIMIZATION]
-  const preferenceBlock = `User Favorites: ${favorites.length > 0 ? favorites.join(', ') : 'None specified.'}\nRecent meals (avoid repeating these): ${recentMeals.join(', ') || 'None logged yet.'}`;
-
-  // Compile system prompt using strict prioritized blocks
-  const systemPrompt = `You are ChefOS, a deterministic, safety-verified household AI operating system.
+    // Compile system prompt using strict prioritized blocks
+    systemPrompt = `You are ChefOS, a deterministic, safety-verified household AI operating system.
 You plan meals for the family by adhering strictly to the constraints below in order of priority.
 
 [CRITICAL SAFETY CONSTRAINT]
@@ -2329,6 +2485,11 @@ ${inventoryBlock}
 [RECALL MEMORY RULES]
 ${memoryBlock}
 
+[CRITICAL CULINARY CONSTRAINT]
+- CULTURAL PAIRINGS: You MUST strictly adhere to authentic regional Indian cuisines. 
+- DO NOT mix North Indian concepts (like Paneer, Tikka, Naan, Chole) or Western concepts (like Grilled Chicken, Pan-Seared Salmon, Pasta) with traditional South Indian dishes (like Palya, Sambar, Dosa, Idli, Rasam, Mudde). 
+- Main courses and side dishes MUST culturally and logically belong to the exact same regional cuisine.
+
 [USER REQUEST]
 User Query: "${text}"
 
@@ -2338,13 +2499,15 @@ ${preferenceBlock}
 INSTRUCTIONS:
 1. First, check if the family's query can be fulfilled using ONLY the available ingredients in [AVAILABLE INVENTORY] without violating [CRITICAL SAFETY CONSTRAINT].
 2. If it is impossible to prepare any safe meal using ONLY the available ingredients, output exactly: [INGREDIENTS_INSUFFICIENT]
-3. If valid meals can be prepared, respond conversationally but concisely. Keep it practical. Suggest any valid meals (even 1 or 2 is acceptable; do not try to make up 5-10 if ingredients are scarce).
-4. Highlight dish names with **bold text** (e.g. **Paneer Tikka**).
-5. Prioritize user's favorites and recalled preferences if they are possible with the available ingredients.
-6. Support commands for updating the fridge inventory in brackets:
+3. IF the user is simply logging a fact, making a statement, or providing feedback (and NOT explicitly asking for a meal suggestion), acknowledge it politely and DO NOT suggest any meals.
+4. IF the user IS asking for a meal suggestion: check if valid meals can be prepared, respond conversationally but concisely, and suggest valid meals (even 1 or 2 is acceptable).
+5. Highlight dish names with **bold text** (e.g. **Lemon Rice**).
+6. Prioritize user's favorites and recalled preferences if they are possible with the available ingredients.
+7. Support commands for updating the fridge inventory in brackets:
    - To add items: [ADD_FRIDGE: 1L milk, 12 eggs]
    - To remove items: [REMOVE_FRIDGE: milk]
    - To update: [REMOVE_FRIDGE: eggs] [ADD_FRIDGE: 10 eggs]`;
+  }
 
   const messages = [];
   dailyChatHistory.slice(-10).forEach(h => {
@@ -2352,7 +2515,13 @@ INSTRUCTIONS:
   });
 
   try {
-    let response = await CascadeFlow.route(messages, systemPrompt);
+    let response;
+    if (isVanilla) {
+      response = await callAI([{ role: 'system', content: systemPrompt }, ...messages], GROQ_MODEL);
+    } else {
+      response = await CascadeFlow.route(messages, systemPrompt);
+    }
+    
     removeThinkingIndicator('daily-messages');
 
     // Parse commands using matchAll to catch multiple instances safely
@@ -2393,67 +2562,74 @@ INSTRUCTIONS:
       response = response.replace(/\[ADD_FRIDGE:.*?\]/g, '').replace(/\[REMOVE_FRIDGE:.*?\]/g, '').trim();
     }
 
+    let isBlocked = false;
+    let finalVerifierData = null;
     const isInsufficient = response.includes('[INGREDIENTS_INSUFFICIENT]');
-    const telemetry = CascadeFlow.lastTelemetry;
-    const verifierData = telemetry?.verifierData;
 
-    const isBlocked = isInsufficient || 
-                     (verifierData && (verifierData.safe === false || verifierData.inventory_match === false || verifierData.integrity_score < 75));
+    if (!isVanilla) {
+      const telemetry = CascadeFlow.lastTelemetry;
+      const verifierData = telemetry?.verifierData;
 
-    if (isBlocked) {
-      let finalVerifierData = verifierData;
-      if (isInsufficient || !finalVerifierData) {
-        finalVerifierData = {
-          safe: false,
-          inventory_match: false,
-          integrity_score: 50,
-          category: "inventory_conflict",
-          proposed_recipe: "Proposed meal",
-          missing_ingredients: ["essential ingredients"],
-          alternative_recipe: "Scrambled Eggs",
-          failed_checks: ["Available ingredients in fridge are insufficient."],
-          reasoning: "Generative engine indicated that the fridge inventory does not contain enough ingredients to formulate a valid, safe meal suggestion."
-        };
-        // Override telemetry verifier state for accuracy
-        if (CascadeFlow.lastTelemetry) {
-          CascadeFlow.lastTelemetry.verifier = "Adjusted";
-          CascadeFlow.lastTelemetry.verifierData = finalVerifierData;
-          CascadeFlow.updateTelemetryUI();
+      isBlocked = isInsufficient || 
+                       (verifierData && (verifierData.safe === false || verifierData.inventory_match === false || verifierData.integrity_score < 75));
+
+      if (isBlocked) {
+        finalVerifierData = verifierData;
+        if (isInsufficient || !finalVerifierData) {
+          finalVerifierData = {
+            safe: false,
+            inventory_match: false,
+            integrity_score: 50,
+            category: "inventory_conflict",
+            proposed_recipe: "Proposed meal",
+            missing_ingredients: ["essential ingredients"],
+            alternative_recipe: "Scrambled Eggs",
+            failed_checks: ["Available ingredients in fridge are insufficient."],
+            reasoning: "Generative engine indicated that the fridge inventory does not contain enough ingredients to formulate a valid, safe meal suggestion."
+          };
+          // Override telemetry verifier state for accuracy
+          if (CascadeFlow.lastTelemetry) {
+            CascadeFlow.lastTelemetry.verifier = "Adjusted";
+            CascadeFlow.lastTelemetry.verifierData = finalVerifierData;
+            CascadeFlow.updateTelemetryUI();
+          }
         }
+
+        // 1. Render custom tailored warning card instead of raw text
+        addBlockedMessage('daily-messages', finalVerifierData);
+        dailyChatHistory.push({ role: 'ai', text: `[Recipe Adjusted: ${finalVerifierData.reasoning}]` });
+        Storage.saveChatSessions(currentUser.email, chatSessions);
+
+        // 2. Float safety warning notification
+        let notifTitle = "✨ Almost Ready";
+        if (finalVerifierData.category === "safety_adjustment") {
+          notifTitle = "🛡️ Adjusted for Comfort";
+        } else if (finalVerifierData.category === "severe_allergy") {
+          notifTitle = "⚠️ Health Guard Activated";
+        }
+        showWowNotification(notifTitle, finalVerifierData.reasoning);
+
+        // 3. Lower memory confidence by keyword for all failed checks
+        if (finalVerifierData.failed_checks && finalVerifierData.failed_checks.length > 0) {
+          finalVerifierData.failed_checks.forEach(check => {
+            lowerConfidenceByKeyword(check);
+          });
+        }
+        
+        // 4. Log timeline event
+        Hindsight.logTimelineEvent(
+          "Menu Adjusted",
+          `Recipe suggestions optimized: ${finalVerifierData.reasoning}`,
+          "Constraint Gating System"
+        );
+
+        return; // Stop here, do not render original response!
       }
-
-      // 1. Render custom tailored warning card instead of raw text
-      addBlockedMessage('daily-messages', finalVerifierData);
-      dailyChatHistory.push({ role: 'ai', text: `[Recipe Adjusted: ${finalVerifierData.reasoning}]` });
-
-      // 2. Float safety warning notification
-      let notifTitle = "✨ Almost Ready";
-      if (finalVerifierData.category === "safety_adjustment") {
-        notifTitle = "🛡️ Adjusted for Comfort";
-      } else if (finalVerifierData.category === "severe_allergy") {
-        notifTitle = "⚠️ Health Guard Activated";
-      }
-      showWowNotification(notifTitle, finalVerifierData.reasoning);
-
-      // 3. Lower memory confidence by keyword for all failed checks
-      if (finalVerifierData.failed_checks && finalVerifierData.failed_checks.length > 0) {
-        finalVerifierData.failed_checks.forEach(check => {
-          lowerConfidenceByKeyword(check);
-        });
-      }
-
-      // 4. Log timeline event
-      Hindsight.logTimelineEvent(
-        "Menu Adjusted",
-        `Recipe suggestions optimized: ${finalVerifierData.reasoning}`,
-        "Constraint Gating System"
-      );
-
-      return;
     }
 
     addMessage('daily-messages', 'ai', response);
     dailyChatHistory.push({ role: 'ai', text: response });
+    Storage.saveChatSessions(currentUser.email, chatSessions);
   } catch (err) {
     removeThinkingIndicator('daily-messages');
     addMessage('daily-messages', 'ai', `Sorry, I ran into an error: ${err.message}`);

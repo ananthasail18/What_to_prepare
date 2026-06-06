@@ -11,6 +11,40 @@ http.createServer((req, res) => {
   
   if (req.method === 'OPTIONS') return res.end();
 
+  if (req.url === '/ai' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      const options = {
+        hostname: '127.0.0.1',
+        port: 1234,
+        path: '/v1/chat/completions',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      };
+      
+      const aiReq = http.request(options, aiRes => {
+        let aiBody = '';
+        aiRes.on('data', chunk => aiBody += chunk);
+        aiRes.on('end', () => {
+          res.setHeader('Content-Type', 'application/json');
+          res.end(aiBody);
+        });
+      });
+      
+      aiReq.on('error', err => {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: { message: "Local LM Studio is not running or accessible. Error: " + err.message } }));
+      });
+      
+      aiReq.write(body);
+      aiReq.end();
+    });
+    return;
+  }
+
   if (req.method === 'GET') {
     res.setHeader('Content-Type', 'application/json');
     res.end(fs.readFileSync(DB_FILE));
